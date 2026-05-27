@@ -1,0 +1,68 @@
+services:
+
+  scheduler:
+    build: ./scheduler
+    restart: unless-stopped
+    ports:
+      - "${SCHEDULER_PORT:-8080}:8080"
+    volumes:
+      - zoom-data:/data
+    networks:
+      - zoom-internal
+
+  recorder:
+    build: ./recorder
+    restart: unless-stopped
+    shm_size: '1gb'
+    volumes:
+      - zoom-data:/data
+    devices:
+      - /dev/dri:/dev/dri
+    ports:
+      - "${NOVNC_PORT:-6080}:6080"
+    networks:
+      - zoom-internal
+    environment:
+      - NOVNC_PORT=${NOVNC_PORT:-6080}
+    deploy:
+      resources:
+        limits:
+          memory: 2g
+
+  audio:
+    build: ./audio
+    restart: unless-stopped
+    volumes:
+      - zoom-data:/data
+    networks:
+      - zoom-internal
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+
+  whisper:
+    build: ./whisper
+    restart: unless-stopped
+    volumes:
+      - zoom-data:/data
+    networks:
+      - zoom-internal
+    environment:
+      - WHISPER_MODEL=${WHISPER_MODEL:-small}
+    deploy:
+      resources:
+        limits:
+          memory: 4g
+
+volumes:
+  zoom-data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${DATA_DIR:-/home/tao/zoom-data}
+
+networks:
+  zoom-internal:
+    driver: bridge
