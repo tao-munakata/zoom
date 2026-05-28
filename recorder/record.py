@@ -89,7 +89,7 @@ async def join_zoom(page, zoom_url, meeting_id, password):
 
 SETTLE_SEC = 90  # 参加直後の読み込み待機時間（この間はURL/title検知しない）
 
-async def wait_for_end(page, max_sec=7200):
+async def wait_for_end(page, end_at: datetime | None = None, max_sec=7200):
     end_texts = [
         # ホストが終了
         'text=This meeting has been ended',
@@ -118,6 +118,10 @@ async def wait_for_end(page, max_sec=7200):
                     return 'ended'
             except Exception:
                 pass
+        # end_at 絶対時刻チェック
+        if end_at and datetime.now() >= end_at:
+            logging.info(f"end_at reached: {end_at}")
+            return 'timeout'
         # URL変化検知（参加直後SETTLE_SEC秒は読み込み中のため無視）
         elapsed = time.time() - t0
         if elapsed > SETTLE_SEC:
@@ -134,17 +138,15 @@ async def wait_for_end(page, max_sec=7200):
 
 MAX_RECORD_SEC = 7200  # 最大録画時間: 2時間
 
-def calc_max_sec(task):
-    """end_at が設定されていれば残り秒数、なければ MAX_RECORD_SEC を返す（上限は MAX_RECORD_SEC）"""
+def get_end_at(task) -> datetime | None:
+    """end_at が設定されていれば datetime を返す"""
     end_at_str = task.get('end_at', '')
     if end_at_str:
         try:
-            end_at = datetime.fromisoformat(end_at_str)
-            remaining = (end_at - datetime.now()).total_seconds()
-            return max(60, min(remaining, MAX_RECORD_SEC))
+            return datetime.fromisoformat(end_at_str)
         except ValueError:
             pass
-    return MAX_RECORD_SEC
+    return None
 
 
 async def process_task(task):
@@ -153,14 +155,23 @@ async def process_task(task):
     meeting_id = task.get('meeting_id', '')
     password   = task.get('password', '')
     out_mp4    = f'{REC_DIR}/{task_id}.mp4'
-    max_sec    = calc_max_sec(task)
+    end_at     = get_end_at(task)
+    max_sec    = MAX_RECORD_SEC
 
     if os.path.exists(out_mp4):
         logging.info(f"Already recorded: {out_mp4}")
         write_status(task_id, 'done')
         return
 
-    logging.info(f"Max recording time: {int(max_sec)}s ({max_sec/60:.0f}min)")
+    if end_at:
+        remaining = (end_at - datetime.now()).total_seconds()
+        if remaining <= 0:
+            logging.warning(f"end_at {end_at} already passed, skipping")
+            write_status(task_id, 'done')
+            return
+        logging.info(f"Recording until {end_at} ({remaining/60:.0f}min remaining)")
+    else:
+        logging.info(f"Max recording time: {max_sec/60:.0f}min (no end_at)")
     write_status(task_id, 'recording')
 
     ffmpeg_cmd = [
@@ -186,7 +197,7 @@ async def process_task(task):
             page = await ctx.new_page()
             try:
                 await join_zoom(page, zoom_url, meeting_id, password)
-                reason = await wait_for_end(page, max_sec=max_sec)
+                reason = await wait_for_end(page, end_at=end_at, max_sec=max_sec)
                 logging.info(f"Meeting ended: {reason}")
             except Exception as e:
                 logging.error(f"Meeting error: {e}")
@@ -224,6 +235,12 @@ async def main():
             except Exception as e:
                 logging.error(f"Task {tid} error: {e}")
                 write_status(tid, 'error')
+            finally:
+                # 処理済みトリガーファイルを削除（再起動で再実行しないように）
+                try:
+                    os.remove(tf)
+                except FileNotFoundError:
+                    pass
         await asyncio.sleep(10)
 
 
