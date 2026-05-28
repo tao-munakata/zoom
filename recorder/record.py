@@ -14,6 +14,9 @@ for d in (REC_DIR, STATUS_DIR):
 
 
 def write_status(task_id, status):
+    # 同タスクの古いステータスファイルを削除してから書く
+    for old in Path(STATUS_DIR).glob(f'{task_id}.*'):
+        old.unlink(missing_ok=True)
     Path(f'{STATUS_DIR}/{task_id}.{status}').touch()
 
 
@@ -191,9 +194,16 @@ async def process_task(task):
                 await browser.close()
     finally:
         ffmpeg_proc.terminate()
-        ffmpeg_proc.wait(timeout=10)
+        try:
+            ffmpeg_proc.wait(timeout=30)
+        except subprocess.TimeoutExpired:
+            logging.warning("FFmpeg did not exit in time, killing")
+            ffmpeg_proc.kill()
+            ffmpeg_proc.wait()
 
     logging.info(f"Saved: {out_mp4}")
+    # audio コンテナへの完了通知（race condition 防止）
+    Path(f'{REC_DIR}/{task_id}.ready').touch()
     write_status(task_id, 'done')
 
 
