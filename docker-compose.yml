@@ -9,6 +9,8 @@ services:
       - zoom-data:/data
     networks:
       - zoom-internal
+    environment:
+      - TZ=Asia/Tokyo
 
   recorder:
     build: ./recorder
@@ -24,6 +26,7 @@ services:
       - zoom-internal
     environment:
       - NOVNC_PORT=${NOVNC_PORT:-6080}
+      - TZ=Asia/Tokyo
     deploy:
       resources:
         limits:
@@ -36,6 +39,8 @@ services:
       - zoom-data:/data
     networks:
       - zoom-internal
+    environment:
+      - TZ=Asia/Tokyo
     deploy:
       resources:
         limits:
@@ -50,6 +55,7 @@ services:
       - zoom-internal
     environment:
       - WHISPER_MODEL=${WHISPER_MODEL:-small}
+      - TZ=Asia/Tokyo
     deploy:
       resources:
         limits:
