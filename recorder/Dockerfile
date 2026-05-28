@@ -1,5 +1,7 @@
 FROM mcr.microsoft.com/playwright/python:v1.44.0-jammy
 
+ENV DEBIAN_FRONTEND=noninteractive
+
 RUN apt-get update && apt-get install -y \
     xvfb x11vnc novnc websockify \
     ffmpeg pulseaudio pulseaudio-utils \
