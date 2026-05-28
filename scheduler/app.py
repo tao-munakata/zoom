@@ -83,6 +83,7 @@ def add_task():
         request.form.get('meeting_id', ''),
         request.form.get('password', ''),
         request.form['start_at'],
+        request.form.get('end_at', ''),
     )
     return redirect(url_for('index'))
 

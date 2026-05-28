@@ -19,17 +19,23 @@ def init_db():
                 meeting_id TEXT DEFAULT '',
                 password TEXT DEFAULT '',
                 start_at TEXT NOT NULL,
+                end_at TEXT DEFAULT '',
                 status TEXT DEFAULT 'pending',
                 created_at TEXT DEFAULT (datetime('now','localtime')),
                 updated_at TEXT DEFAULT (datetime('now','localtime'))
             )
         """)
+        # 既存DBへのカラム追加（初回のみ実行）
+        try:
+            conn.execute("ALTER TABLE tasks ADD COLUMN end_at TEXT DEFAULT ''")
+        except Exception:
+            pass
 
-def create_task(title, zoom_url, meeting_id, password, start_at):
+def create_task(title, zoom_url, meeting_id, password, start_at, end_at=''):
     with get_conn() as conn:
         cur = conn.execute(
-            "INSERT INTO tasks (title,zoom_url,meeting_id,password,start_at) VALUES (?,?,?,?,?)",
-            (title, zoom_url, meeting_id, password, start_at)
+            "INSERT INTO tasks (title,zoom_url,meeting_id,password,start_at,end_at) VALUES (?,?,?,?,?,?)",
+            (title, zoom_url, meeting_id, password, start_at, end_at)
         )
         return cur.lastrowid
 

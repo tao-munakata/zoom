@@ -1,4 +1,5 @@
 import asyncio, os, json, subprocess, time, logging, glob
+from datetime import datetime
 from pathlib import Path
 from playwright.async_api import async_playwright
 
@@ -85,22 +86,66 @@ async def join_zoom(page, zoom_url, meeting_id, password):
 
 async def wait_for_end(page, max_sec=7200):
     end_texts = [
+        # ホストが終了
         'text=This meeting has been ended',
-        'text=このミーティングは終了',
         'text=The host has ended this meeting',
+        'text=このミーティングは終了',
+        'text=ミーティングは終了しました',
+        'text=ホストがミーティングを終了しました',
+        # 自分が退出
+        'text=You have left the meeting',
+        'text=あなたはこのミーティングから退出しました',
+        'text=ミーティングから退出しました',
+        # 参加前にすでに終了していた
+        'text=This meeting is not currently available',
+        'text=This meeting has ended',
+        'text=Meeting Ended',
+        'text=このミーティングは現在ご利用いただけません',
     ]
     t0 = time.time()
     while time.time() - t0 < max_sec:
+        if page.is_closed():
+            return 'closed'
+        # テキスト検知
         for sel in end_texts:
             try:
-                if await page.is_visible(sel, timeout=500):
+                if await page.is_visible(sel, timeout=300):
                     return 'ended'
             except Exception:
                 pass
-        if page.is_closed():
-            return 'closed'
-        await asyncio.sleep(15)
+        # URL変化検知（Zoom会議URL以外になったら終了）
+        try:
+            url = page.url
+            if url and 'zoom.us/wc/' not in url and 'zoom.us/j/' not in url:
+                logging.info(f"URL changed to: {url}")
+                return 'redirected'
+        except Exception:
+            pass
+        # ページタイトル検知
+        try:
+            title = await page.title()
+            if title and 'zoom' not in title.lower() and 'meeting' not in title.lower():
+                logging.info(f"Title changed to: {title}")
+                return 'title_changed'
+        except Exception:
+            pass
+        await asyncio.sleep(5)
     return 'timeout'
+
+
+MAX_RECORD_SEC = 7200  # 最大録画時間: 2時間
+
+def calc_max_sec(task):
+    """end_at が設定されていれば残り秒数、なければ MAX_RECORD_SEC を返す（上限は MAX_RECORD_SEC）"""
+    end_at_str = task.get('end_at', '')
+    if end_at_str:
+        try:
+            end_at = datetime.fromisoformat(end_at_str)
+            remaining = (end_at - datetime.now()).total_seconds()
+            return max(60, min(remaining, MAX_RECORD_SEC))
+        except ValueError:
+            pass
+    return MAX_RECORD_SEC
 
 
 async def process_task(task):
@@ -109,12 +154,14 @@ async def process_task(task):
     meeting_id = task.get('meeting_id', '')
     password   = task.get('password', '')
     out_mp4    = f'{REC_DIR}/{task_id}.mp4'
+    max_sec    = calc_max_sec(task)
 
     if os.path.exists(out_mp4):
         logging.info(f"Already recorded: {out_mp4}")
         write_status(task_id, 'done')
         return
 
+    logging.info(f"Max recording time: {int(max_sec)}s ({max_sec/60:.0f}min)")
     write_status(task_id, 'recording')
 
     ffmpeg_cmd = [
@@ -140,7 +187,7 @@ async def process_task(task):
             page = await ctx.new_page()
             try:
                 await join_zoom(page, zoom_url, meeting_id, password)
-                reason = await wait_for_end(page)
+                reason = await wait_for_end(page, max_sec=max_sec)
                 logging.info(f"Meeting ended: {reason}")
             except Exception as e:
                 logging.error(f"Meeting error: {e}")

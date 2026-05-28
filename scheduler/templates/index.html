@@ -36,6 +36,10 @@
             <label class="form-label">開始日時 <span class="text-danger">*</span></label>
             <input type="datetime-local" name="start_at" class="form-control" required>
           </div>
+          <div class="col-md-2">
+            <label class="form-label">終了日時（最大2時間）</label>
+            <input type="datetime-local" name="end_at" class="form-control">
+          </div>
         </div>
         <div class="mt-3">
           <button type="submit" class="btn btn-primary">登録</button>
@@ -55,6 +59,7 @@
             <th>案件名</th>
             <th>Zoom URL</th>
             <th>開始日時</th>
+            <th>終了日時</th>
             <th>ステータス</th>
             <th>操作</th>
           </tr>
@@ -70,6 +75,7 @@
               </a>
             </td>
             <td class="align-middle small">{{ task.start_at }}</td>
+            <td class="align-middle small text-muted">{{ task.end_at or '—' }}</td>
             <td class="align-middle">
               {% if task.status == 'pending' %}
                 <span class="badge bg-secondary">pending</span>
