@@ -84,6 +84,8 @@ async def join_zoom(page, zoom_url, meeting_id, password):
     logging.info("Joined (or joining)")
 
 
+SETTLE_SEC = 90  # 参加直後の読み込み待機時間（この間はURL/title検知しない）
+
 async def wait_for_end(page, max_sec=7200):
     end_texts = [
         # ホストが終了
@@ -106,29 +108,23 @@ async def wait_for_end(page, max_sec=7200):
     while time.time() - t0 < max_sec:
         if page.is_closed():
             return 'closed'
-        # テキスト検知
+        # テキスト検知（常時）
         for sel in end_texts:
             try:
                 if await page.is_visible(sel, timeout=300):
                     return 'ended'
             except Exception:
                 pass
-        # URL変化検知（Zoom会議URL以外になったら終了）
-        try:
-            url = page.url
-            if url and 'zoom.us/wc/' not in url and 'zoom.us/j/' not in url:
-                logging.info(f"URL changed to: {url}")
-                return 'redirected'
-        except Exception:
-            pass
-        # ページタイトル検知
-        try:
-            title = await page.title()
-            if title and 'zoom' not in title.lower() and 'meeting' not in title.lower():
-                logging.info(f"Title changed to: {title}")
-                return 'title_changed'
-        except Exception:
-            pass
+        # URL変化検知（参加直後SETTLE_SEC秒は読み込み中のため無視）
+        elapsed = time.time() - t0
+        if elapsed > SETTLE_SEC:
+            try:
+                url = page.url
+                if url and 'zoom.us/wc/' not in url and 'zoom.us/j/' not in url:
+                    logging.info(f"URL changed to: {url}")
+                    return 'redirected'
+            except Exception:
+                pass
         await asyncio.sleep(5)
     return 'timeout'
 

@@ -18,11 +18,11 @@
         <div class="row g-3">
           <div class="col-md-3">
             <label class="form-label">案件名 <span class="text-danger">*</span></label>
-            <input type="text" name="title" class="form-control" required>
+            <input type="text" name="title" class="form-control" required minlength="2">
           </div>
           <div class="col-md-4">
             <label class="form-label">Zoom URL <span class="text-danger">*</span></label>
-            <input type="text" name="zoom_url" class="form-control" placeholder="https://zoom.us/j/..." required>
+            <input type="url" name="zoom_url" class="form-control" placeholder="https://zoom.us/j/..." required>
           </div>
           <div class="col-md-2">
             <label class="form-label">ミーティングID</label>
@@ -115,8 +115,19 @@
     </div>
   </div>
 
-  <p class="text-muted small mt-3">30 秒ごとに自動更新</p>
+  <p class="text-muted small mt-3" id="reload-note">フォーム未入力時に30秒ごとに自動更新</p>
 </div>
-<script>setTimeout(() => location.reload(), 30000)</script>
+<script>
+  function formIsEmpty() {
+    const fields = ['title','zoom_url','start_at','end_at'];
+    return fields.every(n => {
+      const el = document.querySelector('[name="' + n + '"]');
+      return !el || el.value.trim() === '';
+    });
+  }
+  setInterval(() => {
+    if (formIsEmpty()) location.reload();
+  }, 30000);
+</script>
 </body>
 </html>
